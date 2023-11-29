@@ -1,12 +1,12 @@
 
-import { dirtyLLMJsonParser } from "@/lib/dirtyLLMJsonParser"
-import { dirtyCaptionCleaner } from "@/lib/dirtyCaptionCleaner"
-
 import { predict } from "./predict"
 import { Preset } from "../engine/presets"
-import { LLMResponse } from "@/types"
+import { GeneratedPanels } from "@/types"
 import { cleanJson } from "@/lib/cleanJson"
 import { createZephyrPrompt } from "@/lib/createZephyrPrompt"
+
+import { dirtyGeneratedPanelCleaner } from "@/lib/dirtyGeneratedPanelCleaner"
+import { dirtyGeneratedPanelsParser } from "@/lib/dirtyGeneratedPanelsParser"
 
 export const getStory = async ({
   preset,
@@ -16,19 +16,19 @@ export const getStory = async ({
   preset: Preset;
   prompt: string;
   nbTotalPanels: number;
-}): Promise<LLMResponse> => {
-  // throw new Error("Planned maintenance")
+}): Promise<GeneratedPanels> => {
+  throw new Error("legacy, deprecated")
   
   // In case you need to quickly debug the RENDERING engine you can uncomment this:
-  // return mockLLMResponse
+  // return mockGeneratedPanels
 
   const query = createZephyrPrompt([
     {
       role: "system",
       content: [
         `You are a writer specialized in ${preset.llmPrompt}`,
-        `Please write detailed drawing instructions and a short (2-3 sentences long) speech caption for the ${nbTotalPanels} panels of a new story. Please make sure each of the ${nbTotalPanels} panels include info about character gender, age, origin, clothes, colors, location, lights, etc.`,
-        `Give your response as a VALID JSON array like this: \`Array<{ panel: number; instructions: string; caption: string}>\`.`,
+        `Please write detailed drawing instructions and short (2-3 sentences long) speech captions for the ${nbTotalPanels} panels of a new story. Please make sure each of the ${nbTotalPanels} panels include info about character gender, age, origin, clothes, colors, location, lights, etc.`,
+        `Give your response as a VALID JSON array like this: \`Array<{ panel: number; instructions: string; caption: string; }>\`.`,
         // `Give your response as Markdown bullet points.`,
         `Be brief in your ${nbTotalPanels} instructions and narrative captions, don't add your own comments. The whole story must be captivating, smart, entertaining. Be straight to the point, and never reply things like "Sure, I can.." etc. Reply using valid JSON.`
       ].filter(item => item).join("\n")
@@ -37,7 +37,7 @@ export const getStory = async ({
       role: "user",
       content: `The story is: ${prompt}`,
     }
-  ]) + "[{"
+  ]) + "\n```[{"
 
 
   let result = ""
@@ -64,10 +64,10 @@ export const getStory = async ({
   // console.log("Raw response from LLM:", result)
   const tmp = cleanJson(result)
   
-  let llmResponse: LLMResponse = []
+  let GeneratedPanels: GeneratedPanels = []
 
   try {
-    llmResponse = dirtyLLMJsonParser(tmp)
+    GeneratedPanels = dirtyGeneratedPanelsParser(tmp)
   } catch (err) {
     // console.log(`failed to read LLM response: ${err}`)
     // console.log(`original response was:`, result)
@@ -75,7 +75,7 @@ export const getStory = async ({
       // in case of failure here, it might be because the LLM hallucinated a completely different response,
       // such as markdown. There is no real solution.. but we can try a fallback:
 
-    llmResponse = (
+    GeneratedPanels = (
       tmp.split("*")
       .map(item => item.trim())
       .map((cap, i) => ({
@@ -86,5 +86,5 @@ export const getStory = async ({
     )
   }
 
-  return llmResponse.map(res => dirtyCaptionCleaner(res))
+  return GeneratedPanels.map(res => dirtyGeneratedPanelCleaner(res))
 }

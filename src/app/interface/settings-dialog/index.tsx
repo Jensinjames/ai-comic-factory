@@ -43,6 +43,10 @@ export function SettingsDialog() {
     localStorageKeys.huggingfaceInferenceApiModelTrigger,
     defaultSettings.huggingfaceInferenceApiModelTrigger
   )
+  const [huggingfaceInferenceApiFileType, setHuggingfaceInferenceApiFileType] = useLocalStorage<string>(
+    localStorageKeys.huggingfaceInferenceApiFileType,
+    defaultSettings.huggingfaceInferenceApiFileType
+  )
   const [replicateApiKey, setReplicateApiKey] = useLocalStorage<string>(
     localStorageKeys.replicateApiKey,
     defaultSettings.replicateApiKey
@@ -73,7 +77,7 @@ export function SettingsDialog() {
       <DialogTrigger asChild>
         <Button className="space-x-1 md:space-x-2">
           <div>
-            <span className="hidden md:inline">Settings</span>
+            <span className="hidden md:inline">Improve quality</span>
           </div>
         </Button> 
       </DialogTrigger>
@@ -119,7 +123,7 @@ export function SettingsDialog() {
                 />
                 <span
                   onClick={() => setRenderingUseTurbo(!renderingUseTurbo)}
-                  className={cn("cursor-pointer", { "text-zinc-800": renderingUseTurbo })}>Use a faster model, but with inferior quality of images (you are warned!).</span>
+                  className={cn("cursor-pointer", { "text-zinc-800": renderingUseTurbo })}>Use a fast low-quality model (default) &nbsp; ⬅️ disable this for improved quality!</span>
               </div>
             </Field>
           </>}
@@ -146,6 +150,17 @@ export function SettingsDialog() {
                   setHuggingfaceInferenceApiModel(x.target.value)
                 }}
                 value={huggingfaceInferenceApiModel}
+              />
+            </Field>
+            <Field>
+              <Label>The file type supported by the model (jpg, webp..):</Label>
+              <Input
+                className="font-mono"
+                placeholder="Inference API file type"
+                onChange={(x) => {
+                  setHuggingfaceInferenceApiFileType(x.target.value)
+                }}
+                value={huggingfaceInferenceApiFileType}
               />
             </Field>
             <p className="text-sm text-zinc-700">
