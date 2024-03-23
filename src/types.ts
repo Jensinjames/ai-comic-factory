@@ -100,6 +100,7 @@ export type LLMEngine =
   | "INFERENCE_ENDPOINT"
   | "OPENAI"
   | "REPLICATE"
+  | "GROQ"
 
   export type RenderingEngine =
   | "VIDEOCHAIN"
@@ -154,9 +155,11 @@ export type LayoutProps = {
   nbPanels: number
 }
 
+// TODO: rename the *Model fields to better indicate if this is a LLM or RENDER mdoel
 export type Settings = {
   renderingModelVendor: RenderingModelVendor
   renderingUseTurbo: boolean
+  huggingFaceOAuth: string
   huggingfaceApiKey: string
   huggingfaceInferenceApiModel: string
   huggingfaceInferenceApiModelTrigger: string
@@ -167,4 +170,20 @@ export type Settings = {
   replicateApiModelTrigger: string
   openaiApiKey: string
   openaiApiModel: string
+  openaiApiLanguageModel: string
+  groqApiKey: string
+  groqApiLanguageModel: string
+  hasGeneratedAtLeastOnce: boolean
+  userDefinedMaxNumberOfPages: number
+}
+
+export type DynamicConfig = {
+  maxNbPages: number
+  nbPanelsPerPage: number
+  nbTotalPanelsToGenerate: number
+  oauthClientId: string
+  oauthRedirectUrl: string
+  oauthScopes: string
+  enableHuggingFaceOAuth: boolean
+  enableHuggingFaceOAuthWall: boolean
 }

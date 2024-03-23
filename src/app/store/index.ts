@@ -7,14 +7,17 @@ import { FontName } from "@/lib/fonts"
 import { Preset, PresetName, defaultPreset, getPreset, getRandomPreset } from "@/app/engine/presets"
 import { RenderedScene } from "@/types"
 import { LayoutName, defaultLayout, getRandomLayoutName } from "../layouts"
-import { MAX_NB_PAGES, NB_PANELS_PER_PAGE } from "@/config"
 
 export const useStore = create<{
   prompt: string
   font: FontName
   preset: Preset
-  nbPages: number
-  nbTotalPanels: number
+  currentNbPanelsPerPage: number
+  maxNbPanelsPerPage: number
+  currentNbPages: number
+  maxNbPages: number
+  currentNbPanels: number
+  maxNbPanels: number
   panels: string[]
   captions: string[]
   upscaleQueue: Record<string, RenderedScene>
@@ -28,6 +31,14 @@ export const useStore = create<{
   panelGenerationStatus: Record<number, boolean>
   isGeneratingText: boolean
   atLeastOnePanelIsBusy: boolean
+
+  setCurrentNbPanelsPerPage: (currentNbPanelsPerPage: number) => void
+  setMaxNbPanelsPerPage: (maxNbPanelsPerPage: number) => void
+  setCurrentNbPages: (currentNbPages: number) => void
+  setMaxNbPages: (maxNbPages: number) => void
+  setCurrentNbPanels: (currentNbPanels: number) => void
+  setMaxNbPanels: (maxNbPanels: number) => void
+  
   setRendered: (panelId: string, renderedScene: RenderedScene) => void
   addToUpscaleQueue: (panelId: string, renderedScene: RenderedScene) => void
   removeFromUpscaleQueue: (panelId: string) => void
@@ -53,10 +64,13 @@ export const useStore = create<{
   prompt: "",
   font: "actionman",
   preset: getPreset(defaultPreset),
-  nbPages: MAX_NB_PAGES,
 
-  // TODO: make this dynamic!
-  nbTotalPanels: NB_PANELS_PER_PAGE * MAX_NB_PAGES,
+  currentNbPanelsPerPage: 4,
+  maxNbPanelsPerPage: 4,
+  currentNbPages: 1,
+  maxNbPages: 1,
+  currentNbPanels: 4,
+  maxNbPanels: 4,
 
   panels: [],
   captions: [],
@@ -71,6 +85,47 @@ export const useStore = create<{
   panelGenerationStatus: {},
   isGeneratingText: false,
   atLeastOnePanelIsBusy: false,
+
+
+  setCurrentNbPanelsPerPage: (currentNbPanelsPerPage: number) => {
+    const { currentNbPages } = get()
+    set({
+      currentNbPanelsPerPage,
+      currentNbPanels: currentNbPanelsPerPage * currentNbPages
+    })
+  },
+  setMaxNbPanelsPerPage: (maxNbPanelsPerPage: number) => {
+    const { maxNbPages } = get()
+    set({
+      maxNbPanelsPerPage,
+      maxNbPanels: maxNbPanelsPerPage * maxNbPages,
+    })
+  },
+  setCurrentNbPages: (currentNbPages: number) => {
+    const { currentNbPanelsPerPage } = get()
+    set({
+      currentNbPages,
+      currentNbPanels: currentNbPanelsPerPage * currentNbPages
+    })
+  },
+  setMaxNbPages: (maxNbPages: number) => {
+    const { maxNbPanelsPerPage } = get()
+    set({
+      maxNbPages,
+      maxNbPanels: maxNbPanelsPerPage * maxNbPages,
+    })
+  },
+  setCurrentNbPanels: (currentNbPanels: number) => {
+    set({
+      currentNbPanels,
+    })
+  },
+  setMaxNbPanels: (maxNbPanels: number) => {
+    set({
+      maxNbPanels
+    })
+  },
+  
   setRendered: (panelId: string, renderedScene: RenderedScene) => {
     const { renderedScenes } = get()
     set({
@@ -146,14 +201,14 @@ export const useStore = create<{
   },
   setLayout: (layoutName: LayoutName) => {
 
-    const { nbPages } = get()
+    const { currentNbPages } = get()
 
     const layout = layoutName === "random"
     ? getRandomLayoutName()
     : layoutName
 
     const layouts: LayoutName[] = []
-    for (let i = 0; i < nbPages; i++) {
+    for (let i = 0; i < currentNbPages; i++) {
       layouts.push(
         layoutName === "random"
           ? getRandomLayoutName()
@@ -195,9 +250,9 @@ export const useStore = create<{
     
     
     const canvas = await html2canvas(page)
-    console.log("canvas:", canvas)
+    // console.log("canvas:", canvas)
 
-    const data = canvas.toDataURL('image/jpeg', 0.5)
+    const data = canvas.toDataURL('image/jpeg', 0.97)
     return data
   },
   download: async () => {
@@ -218,14 +273,14 @@ export const useStore = create<{
   },
   generate: (prompt: string, presetName: PresetName, layoutName: LayoutName) => {
 
-    const { nbPages } = get()
+    const { currentNbPages } = get()
     
     const layout = layoutName === "random"
     ? getRandomLayoutName()
     : layoutName
 
     const layouts: LayoutName[] = []
-    for (let i = 0; i < nbPages; i++) {
+    for (let i = 0; i < currentNbPages; i++) {
       layouts.push(
         layoutName === "random"
           ? getRandomLayoutName()

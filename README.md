@@ -7,6 +7,10 @@ sdk: docker
 pinned: true
 app_port: 3000
 disable_embedding: true
+short_description: Create your own AI comic with a single prompt
+hf_oauth: true
+hf_oauth_expiration_minutes: 43200
+hf_oauth_scopes: [inference-api]
 ---
 
 # AI Comic Factory
@@ -23,13 +27,14 @@ it requires various components to run for the frontend, backend, LLM, SDXL etc.
 If you try to duplicate the project, open the `.env` you will see it requires some variables.
 
 Provider config:
-- `LLM_ENGINE`: can be one of: "INFERENCE_API", "INFERENCE_ENDPOINT", "OPENAI"
+- `LLM_ENGINE`: can be one of: "INFERENCE_API", "INFERENCE_ENDPOINT", "OPENAI", or "GROQ"
 - `RENDERING_ENGINE`: can be one of: "INFERENCE_API", "INFERENCE_ENDPOINT", "REPLICATE", "VIDEOCHAIN", "OPENAI" for now, unless you code your custom solution
 
 Auth config:
-- `AUTH_HF_API_TOKEN`: only if you decide to use OpenAI for the LLM engine necessary if you decide to use an inference api model or a custom inference endpoint
-- `AUTH_OPENAI_TOKEN`: only if you decide to use OpenAI for the LLM engine
-- `AITH_VIDEOCHAIN_API_TOKEN`: secret token to access the VideoChain API server
+- `AUTH_HF_API_TOKEN`:  if you decide to use Hugging Face for the LLM engine (inference api model or a custom inference endpoint)
+- `AUTH_OPENAI_API_KEY`: to use OpenAI for the LLM engine
+- `AUTH_GROQ_API_KEY`: to use Groq for the LLM engine
+- `AUTH_VIDEOCHAIN_API_TOKEN`: secret token to access the VideoChain API server
 - `AUTH_REPLICATE_API_TOKEN`: in case you want to use Replicate.com
 
 Rendering config:
@@ -41,9 +46,12 @@ Rendering config:
 - `RENDERING_REPLICATE_API_MODEL`: optional, defaults to "stabilityai/sdxl"
 - `RENDERING_REPLICATE_API_MODEL_VERSION`: optional, in case you want to change the version
 
-Language model config:
+Language model config (depending on the LLM engine you decide to use):
 - `LLM_HF_INFERENCE_ENDPOINT_URL`: "<use your own>"
-- `LLM_HF_INFERENCE_API_MODEL`: "codellama/CodeLlama-7b-hf"
+- `LLM_HF_INFERENCE_API_MODEL`: "HuggingFaceH4/zephyr-7b-beta"
+- `LLM_OPENAI_API_BASE_URL`: "https://api.openai.com/v1"
+- `LLM_OPENAI_API_MODEL`: "gpt-4"
+- `LLM_GROQ_API_MODEL`: "mixtral-8x7b-32768"
 
 In addition, there are some community sharing variables that you can just ignore.
 Those variables are not required to run the AI Comic Factory on your own website or computer
@@ -62,13 +70,13 @@ To customise a variable locally, you should create a `.env.local`
 
 ## The LLM API (Large Language Model)
 
-Currently the AI Comic Factory uses [Llama-2 70b](https://huggingface.co/blog/llama2) through an [Inference Endpoint](https://huggingface.co/docs/inference-endpoints/index).
+Currently the AI Comic Factory uses [zephyr-7b-beta](https://huggingface.co/HuggingFaceH4/zephyr-7b-beta) through an [Inference Endpoint](https://huggingface.co/docs/inference-endpoints/index).
 
 You have three options:
 
 ### Option 1: Use an Inference API model
 
-This is a new option added recently, where you can use one of the models from the Hugging Face Hub. By default we suggest to use CodeLlama 34b as it will provide better results than the 7b model.
+This is a new option added recently, where you can use one of the models from the Hugging Face Hub. By default we suggest to use [zephyr-7b-beta](https://huggingface.co/HuggingFaceH4/zephyr-7b-beta) as it will provide better results than the 7b model.
 
 To activate it, create a `.env.local` configuration file:
 
@@ -77,10 +85,10 @@ LLM_ENGINE="INFERENCE_API"
 
 HF_API_TOKEN="Your Hugging Face token"
 
-# codellama/CodeLlama-7b-hf" is used by default, but you can change this
+# "HuggingFaceH4/zephyr-7b-beta" is used by default, but you can change this
 # note: You should use a model able to generate JSON responses,
 # so it is storngly suggested to use at least the 34b model
-HF_INFERENCE_API_MODEL="codellama/CodeLlama-7b-hf"
+HF_INFERENCE_API_MODEL="HuggingFaceH4/zephyr-7b-beta"
 ```
 
 ### Option 2: Use an Inference Endpoint URL
@@ -107,14 +115,23 @@ To activate it, create a `.env.local` configuration file:
 LLM_ENGINE="OPENAI"
 
 # default openai api base url is: https://api.openai.com/v1
-LLM_OPENAI_API_BASE_URL="Your OpenAI API Base URL"
+LLM_OPENAI_API_BASE_URL="A custom OpenAI API Base URL if you have some special privileges"
 
 LLM_OPENAI_API_MODEL="gpt-3.5-turbo"
 
-AUTH_OPENAI_API_KEY="Your OpenAI API Key"
+AUTH_OPENAI_API_KEY="Yourown OpenAI API Key"
+```
+### Option 4: (new, experimental) use Groq
+
+```bash
+LLM_ENGINE="GROQ"
+
+LLM_GROQ_API_MODEL="mixtral-8x7b-32768"
+
+AUTH_GROQ_API_KEY="Your own GROQ API Key"
 ```
 
-### Option 4: Fork and modify the code to use a different LLM system
+### Option 5: Fork and modify the code to use a different LLM system
 
 Another option could be to disable the LLM completely and replace it with another LLM protocol and/or provider (eg. Claude, Replicate), or a human-generated story instead (by returning mock or static data).
 

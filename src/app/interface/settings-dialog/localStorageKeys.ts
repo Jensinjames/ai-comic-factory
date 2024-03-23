@@ -3,6 +3,7 @@ import { Settings } from "@/types"
 export const localStorageKeys: Record<keyof Settings, string> = {
   renderingModelVendor: "CONF_RENDERING_MODEL_VENDOR",
   renderingUseTurbo: "CONF_RENDERING_USE_TURBO",
+  huggingFaceOAuth: "CONF_AUTH_HF_OAUTH",
   huggingfaceApiKey: "CONF_AUTH_HF_API_TOKEN",
   huggingfaceInferenceApiModel: "CONF_RENDERING_HF_INFERENCE_API_BASE_MODEL",
   huggingfaceInferenceApiModelTrigger: "CONF_RENDERING_HF_INFERENCE_API_BASE_MODEL_TRIGGER",
@@ -13,4 +14,9 @@ export const localStorageKeys: Record<keyof Settings, string> = {
   replicateApiModelTrigger: "CONF_RENDERING_REPLICATE_API_MODEL_TRIGGER",
   openaiApiKey: "CONF_AUTH_OPENAI_API_KEY",
   openaiApiModel: "CONF_AUTH_OPENAI_API_MODEL",
+  openaiApiLanguageModel: "CONF_AUTH_OPENAI_API_LANGUAGE_MODEL",
+  groqApiKey: "CONF_AUTH_GROQ_API_KEY",
+  groqApiLanguageModel: "CONF_AUTH_GROQ_API_LANGUAGE_MODEL",
+  hasGeneratedAtLeastOnce: "CONF_HAS_GENERATED_AT_LEAST_ONCE",
+  userDefinedMaxNumberOfPages: "CONF_USER_DEFINED_MAX_NUMBER_OF_PAGES"
 }

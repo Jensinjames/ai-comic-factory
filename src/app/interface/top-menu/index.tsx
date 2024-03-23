@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
+import { StaticImageData } from "next/image"
+import { useLocalStorage } from "usehooks-ts"
 
 import {
   Select,
@@ -19,13 +21,16 @@ import { PresetName, defaultPreset, nonRandomPresets, presets } from "@/app/engi
 import { useStore } from "@/app/store"
 import { Button } from "@/components/ui/button"
 import { LayoutName, allLayoutLabels, defaultLayout, nonRandomLayouts } from "@/app/layouts"
+import { Switch } from "@/components/ui/switch"
+import { useOAuth } from "@/lib/useOAuth"
 
 import layoutPreview0 from "../../../../public/layouts/layout0.jpg"
 import layoutPreview1 from "../../../../public/layouts/layout1.jpg"
 import layoutPreview2 from "../../../../public/layouts/layout2.jpg"
 import layoutPreview3 from "../../../../public/layouts/layout3.jpg"
-import { StaticImageData } from "next/image"
-import { Switch } from "@/components/ui/switch"
+import { localStorageKeys } from "../settings-dialog/localStorageKeys"
+import { defaultSettings } from "../settings-dialog/defaultSettings"
+import { AuthWall } from "../auth-wall"
 
 const layoutIcons: Partial<Record<LayoutName, StaticImageData>> = {
   Layout0: layoutPreview0,
@@ -51,7 +56,18 @@ export function TopMenu() {
   const isGeneratingStory = useStore(state => state.isGeneratingStory)
   const atLeastOnePanelIsBusy = useStore(state => state.atLeastOnePanelIsBusy)
   const isBusy = isGeneratingStory || atLeastOnePanelIsBusy
-  
+
+
+  const [lastDraftPromptA, setLastDraftPromptA] = useLocalStorage<string>(
+    "AI_COMIC_FACTORY_LAST_DRAFT_PROMPT_A",
+    ""
+  )
+
+  const [lastDraftPromptB, setLastDraftPromptB] = useLocalStorage<string>(
+    "AI_COMIC_FACTORY_LAST_DRAFT_PROMPT_B",
+    ""
+  )
+
   const searchParams = useSearchParams()
 
   const requestedPreset = (searchParams?.get('preset') as PresetName) || defaultPreset
@@ -59,15 +75,34 @@ export function TopMenu() {
   const requestedPrompt = (searchParams?.get('prompt') as string) || ""
   const requestedLayout = (searchParams?.get('layout') as LayoutName) || defaultLayout
 
-  const [draftPromptA, setDraftPromptA] = useState(requestedPrompt)
-  const [draftPromptB, setDraftPromptB] = useState(requestedPrompt)
+  const [draftPromptA, setDraftPromptA] = useState(lastDraftPromptA)
+  const [draftPromptB, setDraftPromptB] = useState(lastDraftPromptB)
   const draftPrompt = `${draftPromptA}||${draftPromptB}`
 
   const [draftPreset, setDraftPreset] = useState<PresetName>(requestedPreset)
   const [draftLayout, setDraftLayout] = useState<LayoutName>(requestedLayout)
+  
+  const { isLoggedIn, enableOAuthWall } = useOAuth({ debug: false })
+  
+  const [hasGeneratedAtLeastOnce, setHasGeneratedAtLeastOnce] = useLocalStorage<boolean>(
+    localStorageKeys.hasGeneratedAtLeastOnce,
+    defaultSettings.hasGeneratedAtLeastOnce
+  )
+
+  const [showAuthWall, setShowAuthWall] = useState(false)
+
+  // we synchronize the draft prompt with the local storage
+  useEffect(() => { if (lastDraftPromptA !== draftPromptA) { setLastDraftPromptA(draftPromptA) } }, [draftPromptA])
+  useEffect(() => { if (lastDraftPromptA !== draftPromptA) { setDraftPromptA(lastDraftPromptA) } }, [lastDraftPromptA])
+  useEffect(() => { if (lastDraftPromptB !== draftPromptB) { setLastDraftPromptB(draftPromptB) } }, [draftPromptB])
+  useEffect(() => { if (lastDraftPromptB !== draftPromptB) { setDraftPromptB(lastDraftPromptB) } }, [lastDraftPromptB])
 
   const handleSubmit = () => {
-
+    if (enableOAuthWall && hasGeneratedAtLeastOnce && !isLoggedIn) {
+      setShowAuthWall(true)
+      return
+    }
+    
     const promptChanged = draftPrompt.trim() !== prompt.trim()
     const presetChanged = draftPreset !== preset.id
     const layoutChanged = draftLayout !== layout
@@ -91,13 +126,14 @@ export function TopMenu() {
       `backdrop-blur-xl`,
       `transition-all duration-200 ease-in-out`,
       `px-2 py-2 border-b-1 border-gray-50 dark:border-gray-50`,
-      `bg-stone-900/70 dark:bg-stone-900/70 text-gray-50 dark:text-gray-50`,
+      //`bg-[#2d435c] dark:bg-[#2d435c] text-gray-50 dark:text-gray-50`,
+      `bg-gradient-to-r from-[#102c4c] to-[#1a426f] dark:bg-gradient-to-r dark:from-[#102c4c] dark:to-[#1a426f]`,
       `space-y-2 md:space-y-0 md:space-x-3 lg:space-x-6`
     )}>
       <div className="flex flex-row space-x-2 md:space-x-3 w-full md:w-auto">
         <div className={cn(
           `transition-all duration-200 ease-in-out`,
-          `flex flex-row items-center justify-start space-x-3 font-mono`,
+          `flex flex-row items-center justify-start space-x-3`,
           `flex-grow`
           )}>
 
@@ -108,7 +144,7 @@ export function TopMenu() {
             onValueChange={(value) => { setDraftPreset(value as PresetName) }}
             disabled={isBusy}
             >
-            <SelectTrigger className="flex-grow">
+            <SelectTrigger className="flex-grow bg-gray-100 text-gray-700 dark:bg-gray-100 dark:text-gray-700">
               <SelectValue className="text-2xs md:text-sm" placeholder="Style" />
             </SelectTrigger>
             <SelectContent>
@@ -120,7 +156,7 @@ export function TopMenu() {
         </div>
         <div className={cn(
           `transition-all duration-200 ease-in-out`,
-          `flex flex-row items-center justify-start space-x-3 font-mono`,
+          `flex flex-row items-center justify-start space-x-3`,
           `w-40`
           )}>
 
@@ -131,13 +167,13 @@ export function TopMenu() {
             onValueChange={(value) => { setDraftLayout(value as LayoutName) }}
             disabled={isBusy}
             >
-            <SelectTrigger className="flex-grow">
+            <SelectTrigger className="flex-grow bg-gray-100 text-gray-700 dark:bg-gray-100 dark:text-gray-700">
               <SelectValue className="text-2xs md:text-sm" placeholder="Layout" />
             </SelectTrigger>
             <SelectContent>
               {nonRandomLayouts.map(key =>
                 <SelectItem key={key} value={key} className="w-full">
-                  <div className="space-x-6 flex flex-row items-center justify-between font-mono">
+                  <div className="space-x-6 flex flex-row items-center justify-between">
                     <div className="flex">{
                       (allLayoutLabels as any)[key]
                     }</div>
@@ -162,7 +198,7 @@ export function TopMenu() {
           checked={showCaptions}
           onCheckedChange={setShowCaptions}
         />
-        <Label>
+        <Label className="text-gray-200 dark:text-gray-200">
           <span className="hidden md:inline">Caption</span>
           <span className="inline md:hidden">Cap.</span>
         </Label>
@@ -170,7 +206,7 @@ export function TopMenu() {
         {/*
         <div className={cn(
           `transition-all duration-200 ease-in-out`,
-          `flex flex-row items-center space-x-3 font-mono w-1/2 md:w-auto md:hidden`
+          `flex flex-row items-center space-x-3 w-1/2 md:w-auto md:hidden`
         )}>
           <Label className="flex text-2xs md:text-sm md:w-24">Font:</Label>
           <Select
@@ -197,13 +233,17 @@ export function TopMenu() {
       </div>
       <div className={cn(
           `transition-all duration-200 ease-in-out`,
-          `flex  flex-grow flex-col space-y-2 md:space-y-0 md:flex-row items-center md:space-x-3 font-mono w-full md:w-auto`
+          `flex  flex-grow flex-col space-y-2 md:space-y-0 md:flex-row items-center md:space-x-3 w-full md:w-auto`
         )}>
         <div className="flex flex-row flex-grow w-full">
           <div className="flex flex-row flex-grow w-full">
             <Input
-              placeholder="1. Story prompt"
-              className="w-1/2 bg-neutral-300 text-neutral-800 dark:bg-neutral-300 dark:text-neutral-800 rounded-r-none border-r-stone-100"
+              placeholder="1. Story (eg. detective dog)"
+              className={cn(
+                `w-1/2 rounded-r-none`,
+                `bg-gray-100 text-gray-700 dark:bg-gray-100 dark:text-gray-700`,
+                `border-r-stone-100`
+              )}
               // disabled={atLeastOnePanelIsBusy}
               onChange={(e) => {
                 setDraftPromptB(e.target.value)
@@ -216,8 +256,12 @@ export function TopMenu() {
               value={draftPromptB}
             />
             <Input
-              placeholder="2. Style/character prompt"
-              className="w-1/2 bg-neutral-300 text-neutral-800 dark:bg-neutral-300 dark:text-neutral-800 border-l-stone-100 rounded-l-none rounded-r-none"
+              placeholder="2. Style (eg 'rain, shiba')"
+              className={cn(
+                `w-1/2`,
+                `bg-gray-100 text-gray-700 dark:bg-gray-100 dark:text-gray-700`,
+                `border-l-gray-300 rounded-l-none rounded-r-none`
+              )}
               // disabled={atLeastOnePanelIsBusy}
               onChange={(e) => {
                 setDraftPromptA(e.target.value)
@@ -230,19 +274,22 @@ export function TopMenu() {
               value={draftPromptA}
             />
           </div>
-          <Button
-          className={cn(
-            `rounded-l-none cursor-pointer`,
-            `transition-all duration-200 ease-in-out`,
-            `bg-[rgb(59,134,247)] hover:bg-[rgb(69,144,255)] disabled:bg-[rgb(59,134,247)]`
-            )}
-          onClick={() => {
-            handleSubmit()
-          }}
-          disabled={!draftPrompt?.trim().length || isBusy}
-        >
-          Go
-        </Button>
+            <Button
+            className={cn(
+              `rounded-l-none cursor-pointer`,
+              `transition-all duration-200 ease-in-out`,
+              `text-xl`,
+              `bg-[rgb(59,134,247)] hover:bg-[rgb(69,144,255)] disabled:bg-[rgb(59,134,247)]`
+              )}
+            onClick={() => {
+              handleSubmit()
+            }}
+            disabled={!draftPrompt?.trim().length || isBusy}
+          >
+            Go
+          </Button>
+
+          <AuthWall show={showAuthWall} />
         </div>
       </div>
       {/*
@@ -250,7 +297,7 @@ export function TopMenu() {
         are confused about why they can't activate it
       <div className={cn(
           `transition-all duration-200 ease-in-out`,
-          `hidden md:flex flex-row items-center space-x-3 font-mono w-full md:w-auto`
+          `hidden md:flex flex-row items-center space-x-3 w-full md:w-auto`
       )}>
         <Label className="flex text-2xs md:text-sm w-24">Font:</Label>
         <Select

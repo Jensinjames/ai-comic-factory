@@ -2,7 +2,7 @@
 
 import dynamic from "next/dynamic";
 
-export const BottomBar = dynamic(() => import("./bottom-bar"), {
+export const SignUpCTA = dynamic(() => import("./sign-up-cta"), {
   // Make sure we turn SSR off
   ssr: false,
 });

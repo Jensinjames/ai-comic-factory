@@ -6,18 +6,19 @@ import { cleanJson } from "@/lib/cleanJson"
 import { createZephyrPrompt } from "@/lib/createZephyrPrompt"
 import { dirtyGeneratedPanelCleaner } from "@/lib/dirtyGeneratedPanelCleaner"
 import { dirtyGeneratedPanelsParser } from "@/lib/dirtyGeneratedPanelsParser"
+import { sleep } from "@/lib/sleep"
 
 export const predictNextPanels = async ({
   preset,
   prompt = "",
   nbPanelsToGenerate = 2,
-  nbTotalPanels = 8,
+  maxNbPanels = 4,
   existingPanels = [],
 }: {
   preset: Preset;
   prompt: string;
   nbPanelsToGenerate?: number;
-  nbTotalPanels?: number;
+  maxNbPanels?: number;
   existingPanels: GeneratedPanel[];
 }): Promise<GeneratedPanel[]> => {
   // console.log("predictNextPanels: ", { prompt, nbPanelsToGenerate })
@@ -34,7 +35,7 @@ export const predictNextPanels = async ({
   const firstNextOrLast =
     existingPanels.length === 0
       ? "first"
-      : (nbTotalPanels - existingPanels.length) === nbTotalPanels
+      : (maxNbPanels - existingPanels.length) === maxNbPanels
       ? "last"
       : "next"
 
@@ -43,7 +44,7 @@ export const predictNextPanels = async ({
       role: "system",
       content: [
         `You are a writer specialized in ${preset.llmPrompt}`,
-        `Please write detailed drawing instructions and short (2-3 sentences long) speech captions for the ${firstNextOrLast} ${nbPanelsToGenerate} panels (out of ${nbTotalPanels} in total) of a new story, but keep it open-ended (it will be continued and expanded later). Please make sure each of those ${nbPanelsToGenerate} panels include info about character gender, age, origin, clothes, colors, location, lights, etc. Only generate those ${nbPanelsToGenerate} panels, but take into account the fact the panels are part of a longer story (${nbTotalPanels} panels long).`,
+        `Please write detailed drawing instructions and short (2-3 sentences long) speech captions for the ${firstNextOrLast} ${nbPanelsToGenerate} panels (out of ${maxNbPanels} in total) of a new story, but keep it open-ended (it will be continued and expanded later). Please make sure each of those ${nbPanelsToGenerate} panels include info about character gender, age, origin, clothes, colors, location, lights, etc. Only generate those ${nbPanelsToGenerate} panels, but take into account the fact the panels are part of a longer story (${maxNbPanels} panels long).`,
         `Give your response as a VALID JSON array like this: \`Array<{ panel: number; instructions: string; caption: string; }>\`.`,
         // `Give your response as Markdown bullet points.`,
         `Be brief in the instructions and narrative captions of those ${nbPanelsToGenerate} panels, don't add your own comments. The captions must be captivating, smart, entertaining. Be straight to the point, and never reply things like "Sure, I can.." etc. Reply using valid JSON!! Important: Write valid JSON!`
@@ -58,17 +59,26 @@ export const predictNextPanels = async ({
 
   let result = ""
 
+  // we don't require a lot of token for our task
+  // but to be safe, let's count ~130 tokens per panel
+  const nbTokensPerPanel = 130
+
+  const nbMaxNewTokens = nbPanelsToGenerate * nbTokensPerPanel
+
   try {
     // console.log(`calling predict(${query}, ${nbTotalPanels})`)
-    result = `${await predict(query, nbPanelsToGenerate) || ""}`.trim()
+    result = `${await predict(query, nbMaxNewTokens)}`.trim()
     console.log("LLM result (1st trial):", result)
     if (!result.length) {
       throw new Error("empty result on 1st trial!")
     }
   } catch (err) {
     // console.log(`prediction of the story failed, trying again..`)
+    // this should help throttle things on a bit on the LLM API side
+    await sleep(2000)
+
     try {
-      result = `${await predict(query + " \n ", nbPanelsToGenerate) || ""}`.trim()
+      result = `${await predict(query + " \n ", nbMaxNewTokens)}`.trim()
       console.log("LLM result (2nd trial):", result)
       if (!result.length) {
         throw new Error("empty result on 2nd trial!")
