@@ -1,11 +1,14 @@
 "use client"
 
-import { Suspense, useEffect, useState, useTransition } from "react"
+import { Suspense, useEffect, useRef, useState, useTransition } from "react"
+import { useLocalStorage } from "usehooks-ts"
 
 import { cn } from "@/lib/utils"
 import { fonts } from "@/lib/fonts"
 import { GeneratedPanel } from "@/types"
 import { joinWords } from "@/lib/joinWords"
+import { useDynamicConfig } from "@/lib/useDynamicConfig"
+import { Button } from "@/components/ui/button"
 
 import { TopMenu } from "./interface/top-menu"
 import { useStore } from "./store"
@@ -13,16 +16,15 @@ import { Zoom } from "./interface/zoom"
 import { BottomBar } from "./interface/bottom-bar"
 import { Page } from "./interface/page"
 import { getStoryContinuation } from "./queries/getStoryContinuation"
-import { useDynamicConfig } from "@/lib/useDynamicConfig"
-import { useLocalStorage } from "usehooks-ts"
 import { localStorageKeys } from "./interface/settings-dialog/localStorageKeys"
 import { defaultSettings } from "./interface/settings-dialog/defaultSettings"
-import { Button } from "@/components/ui/button"
 import { SignUpCTA } from "./interface/sign-up-cta"
+import { useLLMVendorConfig } from "@/lib/useLLMVendorConfig"
 
 export default function Main() {
   const [_isPending, startTransition] = useTransition()
 
+  const llmVendorConfig = useLLMVendorConfig()
   const { config, isConfigReady } = useDynamicConfig()
   const isGeneratingStory = useStore(s => s.isGeneratingStory)
   const setGeneratingStory = useStore(s => s.setGeneratingStory)
@@ -31,10 +33,9 @@ export default function Main() {
   const preset = useStore(s => s.preset)
   const prompt = useStore(s => s.prompt)
 
-  const currentNbPanelsPerPage = useStore(s => s.currentNbPanelsPerPage)
-  const maxNbPanelsPerPage = useStore(s => s.maxNbPanelsPerPage)
   const currentNbPages = useStore(s => s.currentNbPages)
   const maxNbPages = useStore(s => s.maxNbPages)
+  const previousNbPanels = useStore(s => s.previousNbPanels)
   const currentNbPanels = useStore(s => s.currentNbPanels)
   const maxNbPanels = useStore(s => s.maxNbPanels)
 
@@ -42,10 +43,14 @@ export default function Main() {
   const setMaxNbPanelsPerPage = useStore(s => s.setMaxNbPanelsPerPage)
   const setCurrentNbPages = useStore(s => s.setCurrentNbPages)
   const setMaxNbPages = useStore(s => s.setMaxNbPages)
-  const setCurrentNbPanels = useStore(s => s.setCurrentNbPanels)
-  const setMaxNbPanels = useStore(s => s.setMaxNbPanels)
 
+  const panels = useStore(s => s.panels)
   const setPanels = useStore(s => s.setPanels)
+
+  // do we need those?
+  const renderedScenes = useStore(s => s.renderedScenes)
+  const captions = useStore(s => s.captions)
+
   const setCaptions = useStore(s => s.setCaptions)
 
   const zoomLevel = useStore(s => s.zoomLevel)
@@ -57,12 +62,49 @@ export default function Main() {
     defaultSettings.userDefinedMaxNumberOfPages
   )
   
+  const numberOfPanels = Object.keys(panels).length
+  const panelGenerationStatus = useStore(state => state.panelGenerationStatus)
+  const allStatus = Object.values(panelGenerationStatus)
+  const numberOfPendingGenerations = allStatus.reduce((acc, s) => (acc + (s ? 1 : 0)), 0)
+
+  const hasAtLeastOnePage = numberOfPanels > 0
+
+  const hasNoPendingGeneration =
+    numberOfPendingGenerations === 0
+
+  const hasStillMorePagesToGenerate =
+    currentNbPages < maxNbPages
+
+  const showNextPageButton =
+    hasAtLeastOnePage &&
+    hasNoPendingGeneration &&
+    hasStillMorePagesToGenerate
+  
+  /*
+  console.log("<Main>: " + JSON.stringify({
+    currentNbPages,
+    hasAtLeastOnePage,
+    numberOfPendingGenerations,
+    hasNoPendingGeneration,
+    hasStillMorePagesToGenerate,
+    showNextPageButton
+  }, null, 2))
+  */
+
   useEffect(() => {
     if (maxNbPages !== userDefinedMaxNumberOfPages) {
       setMaxNbPages(userDefinedMaxNumberOfPages)
     }
   }, [maxNbPages, userDefinedMaxNumberOfPages])
 
+
+  const ref = useRef({
+    existingPanels: [] as GeneratedPanel[],
+    newPanelsPrompts: [] as string[],
+    newCaptions: [] as string[],
+    prompt: "",
+    preset: "",
+  })
 
   useEffect(() => {
     if (isConfigReady) {
@@ -76,14 +118,29 @@ export default function Main() {
 
   // react to prompt changes
   useEffect(() => {
+    // console.log(`main.tsx: asked to re-generate!!`)
     if (!prompt) { return }
+
+    // if the prompt or preset changed, we clear the cache
+    // this part is important, otherwise when trying to change the prompt
+    // we wouldn't still have remnants of the previous comic
+    // in the data sent to the LLM (also the page cursor would be wrong)
+    if (
+      prompt !== ref.current.prompt || 
+      preset?.label !== ref.current.preset) {
+      // console.log("overwriting ref.current!")
+      ref.current = {
+        existingPanels: [],
+        newPanelsPrompts: [],
+        newCaptions: [],
+        prompt,
+        preset: preset?.label || "",
+      }
+    }
 
     startTransition(async () => {
       setWaitABitMore(false)
       setGeneratingStory(true)
-
-      // I don't think we are going to need a rate limiter on the LLM part anymore
-      const enableRateLimiter = false // `${process.env.NEXT_PUBLIC_ENABLE_RATE_LIMITER}`  === "true"
 
       const [stylePrompt, userStoryPrompt] = prompt.split("||").map(x => x.trim())
 
@@ -95,25 +152,30 @@ export default function Main() {
       }
     
       // new experimental prompt: let's drop the user prompt, and only use the style
-      const lightPanelPromptPrefix = joinWords(preset.imagePrompt(limitedStylePrompt))
+      const lightPanelPromptPrefix: string = joinWords(preset.imagePrompt(limitedStylePrompt))
     
       // this prompt will be used if the LLM generation failed
-      const degradedPanelPromptPrefix = joinWords([
+      const degradedPanelPromptPrefix: string = joinWords([
         ...preset.imagePrompt(limitedStylePrompt),
     
         // we re-inject the story, then
         userStoryPrompt
       ])
 
-      let existingPanels: GeneratedPanel[] = []
-      const newPanelsPrompts: string[] = []
-      const newCaptions: string[] = []
-
       // we always generate panels 2 by 2
       const nbPanelsToGenerate = 2
 
+      /*
+      console.log("going to call getStoryContinuation based on: " + JSON.stringify({
+        previousNbPanels,
+        currentNbPanels,
+        nbPanelsToGenerate,
+        "ref.current:": ref.current,
+      }, null, 2))
+      */
+    
       for (
-        let currentPanel = 0;
+        let currentPanel = previousNbPanels;
         currentPanel < currentNbPanels;
         currentPanel += nbPanelsToGenerate
       ) {
@@ -124,48 +186,57 @@ export default function Main() {
             userStoryPrompt,
             nbPanelsToGenerate,
             maxNbPanels,
-            existingPanels,
+
+            // existing panels are critical here: this is how we can
+            // continue over an existing story
+            existingPanels: ref.current.existingPanels,
+
+            llmVendorConfig,
           })
-          console.log("LLM generated some new panels:", candidatePanels)
+          // console.log("LLM generated some new panels:", candidatePanels)
 
-          existingPanels.push(...candidatePanels)
+          ref.current.existingPanels.push(...candidatePanels)
+          // console.log("ref.current.existingPanels.push(...candidatePanels) successful, now we have ref.current.existingPanels = ", ref.current.existingPanels)
 
-          console.log(`Converting the ${nbPanelsToGenerate} new panels into image prompts..`)
+          // console.log(`main.tsx: converting the ${nbPanelsToGenerate} new panels into image prompts..`)
          
           const startAt = currentPanel
           const endAt = currentPanel + nbPanelsToGenerate
           for (let p = startAt; p < endAt; p++) {
-            newCaptions.push(existingPanels[p]?.caption.trim() || "...")
+            ref.current.newCaptions.push(ref.current.existingPanels[p]?.caption.trim() || "...")
             const newPanel = joinWords([
     
               // what we do here is that ideally we give full control to the LLM for prompting,
               // unless there was a catastrophic failure, in that case we preserve the original prompt
-              existingPanels[p]?.instructions
+              ref.current.existingPanels[p]?.instructions
               ? lightPanelPromptPrefix
               : degradedPanelPromptPrefix,
     
-              existingPanels[p]?.instructions
+              ref.current.existingPanels[p]?.instructions || ""
             ])
-            newPanelsPrompts.push(newPanel)
+            ref.current.newPanelsPrompts.push(newPanel)
 
-            console.log(`Image prompt for panel ${p} => "${newPanel}"`)
+            console.log(`main.tsx: image prompt for panel ${p} => "${newPanel}"`)
           }
 
           // update the frontend
           // console.log("updating the frontend..")
-          setCaptions(newCaptions)
-          setPanels(newPanelsPrompts)    
+          setCaptions(ref.current.newCaptions)
+          setPanels(ref.current.newPanelsPrompts)    
 
           setGeneratingStory(false)
         } catch (err) {
-          console.log("failed to generate the story, aborting here")
+          console.log("main.tsx: LLM generation failed:", err)
           setGeneratingStory(false)
           break
         }
         if (currentPanel > (currentNbPanels / 2)) {
-          console.log("good, we are half way there, hold tight!")
+          console.log("main.tsx: we are halfway there, hold tight!")
           // setWaitABitMore(true)
         }
+        
+        // we could sleep here if we want to
+        // await sleep(1000)
       }
    
       /*
@@ -176,7 +247,13 @@ export default function Main() {
       */
  
     })
-  }, [prompt, preset?.label, currentNbPanels, maxNbPanels]) // important: we need to react to preset changes too
+  }, [
+    prompt,
+    preset?.label,
+    previousNbPanels,
+    currentNbPanels,
+    maxNbPanels
+  ]) // important: we need to react to preset changes too
 
   return (
     <Suspense>
@@ -185,7 +262,10 @@ export default function Main() {
         `flex items-start w-screen h-screen pt-24 md:pt-[72px] overflow-y-scroll`,
         `transition-all duration-200 ease-in-out`,
         zoomLevel > 105 ? `px-0` : `pl-1 pr-8 md:pl-16 md:pr-16`,
-        `print:pt-0 print:px-0 print:pl-0 print:pr-0`,
+
+        // important: in "print" mode we need to allow going out of the screen
+        `print:pt-0 print:px-0 print:pl-0 print:pr-0 print:h-auto print:w-auto print:overflow-visible`,
+
         fonts.actionman.className
       )}>
         <div
@@ -196,8 +276,15 @@ export default function Main() {
           <div
             className={cn(
               `comic-page`,
-              `flex flex-col md:flex-row md:space-x-8 lg:space-x-12 xl:space-x-16 md:items-center md:justify-start`,
-              `print:space-x-4 print:flex-row`,
+
+              `grid grid-cols-1`,
+              currentNbPages > 1 ? `md:grid-cols-2` : ``,
+
+              // spaces between pages
+              `gap-x-3 gap-y-4 md:gap-x-8 lg:gap-x-12 xl:gap-x-16`,
+
+              // when printed
+              `print:gap-x-3 print:gap-y-4 print:grid-cols-1`,
             )}
             style={{
               width: `${zoomLevel}%`
@@ -205,11 +292,16 @@ export default function Main() {
             {Array(currentNbPages).fill(0).map((_, i) => <Page key={i} page={i} />)}
           </div>
           {
-          // currentNbPages < maxNbPages &&
-          //   <div className="flex flex-col space-y-2 pt-2 pb-6 text-gray-600 dark:text-gray-600">
-          //     <div>Happy with your story?</div>
-          //     <div>You can <Button>Add page {currentNbPages + 1} 👀</Button></div>
-          //   </div>
+          showNextPageButton &&
+            <div className={cn(
+              `flex flex-col space-y-2 pt-2 pb-6 text-gray-600 dark:text-gray-600`,
+              `print:hidden`
+            )}>
+              <div>Happy with your story?</div>
+              <div>You can <Button onClick={() => {
+                setCurrentNbPages(currentNbPages + 1)
+              }}>Add page {currentNbPages + 1} 👀</Button></div>
+            </div>
           }
         </div>
       </div>

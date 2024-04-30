@@ -41,6 +41,14 @@ const layoutIcons: Partial<Record<LayoutName, StaticImageData>> = {
 }
 
 export function TopMenu() {
+  const searchParams = useSearchParams()
+
+  const requestedPreset = (searchParams?.get('preset') as PresetName) || defaultPreset
+  const requestedFont = (searchParams?.get('font') as FontName) || defaultFont
+  const requestedStylePrompt = (searchParams?.get('stylePrompt') as string) || ""
+  const requestedStoryPrompt = (searchParams?.get('storyPrompt') as string) || ""
+  const requestedLayout = (searchParams?.get('layout') as LayoutName) || defaultLayout
+
    // const font = useStore(state => state.font)
   // const setFont = useStore(state => state.setFont)
   const preset = useStore(state => state.preset)
@@ -51,6 +59,9 @@ export function TopMenu() {
   const setShowCaptions = useStore(state => state.setShowCaptions)
   const showCaptions = useStore(state => state.showCaptions)
 
+  const currentNbPages = useStore(state => state.currentNbPages)
+  const setCurrentNbPages = useStore(state => state.setCurrentNbPages)
+
   const generate = useStore(state => state.generate)
 
   const isGeneratingStory = useStore(state => state.isGeneratingStory)
@@ -60,20 +71,13 @@ export function TopMenu() {
 
   const [lastDraftPromptA, setLastDraftPromptA] = useLocalStorage<string>(
     "AI_COMIC_FACTORY_LAST_DRAFT_PROMPT_A",
-    ""
+    requestedStylePrompt
   )
 
   const [lastDraftPromptB, setLastDraftPromptB] = useLocalStorage<string>(
     "AI_COMIC_FACTORY_LAST_DRAFT_PROMPT_B",
-    ""
+    requestedStoryPrompt
   )
-
-  const searchParams = useSearchParams()
-
-  const requestedPreset = (searchParams?.get('preset') as PresetName) || defaultPreset
-  const requestedFont = (searchParams?.get('font') as FontName) || defaultFont
-  const requestedPrompt = (searchParams?.get('prompt') as string) || ""
-  const requestedLayout = (searchParams?.get('layout') as LayoutName) || defaultLayout
 
   const [draftPromptA, setDraftPromptA] = useState(lastDraftPromptA)
   const [draftPromptB, setDraftPromptB] = useState(lastDraftPromptB)
@@ -102,7 +106,7 @@ export function TopMenu() {
       setShowAuthWall(true)
       return
     }
-    
+
     const promptChanged = draftPrompt.trim() !== prompt.trim()
     const presetChanged = draftPreset !== preset.id
     const layoutChanged = draftLayout !== layout
